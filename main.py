@@ -99,6 +99,7 @@ def _scan_directory(directory: Path):
         result.append(_get_file_info(item, directory))
     return result
 
+
 async def search_files(keyword: str, base_dir: Path, start_dir: Path = None):
     """搜索文件
     keyword: 搜索关键词
@@ -107,27 +108,28 @@ async def search_files(keyword: str, base_dir: Path, start_dir: Path = None):
     """
     if start_dir is None:
         start_dir = base_dir
-    
+
     results = []
-    
+
     # 使用异步方式递归搜索文件
     async def search_recursive(directory: Path):
         for item in directory.iterdir():
             # 如果文件名包含关键词，添加到结果中
             if keyword.lower() in item.name.lower():
                 results.append(_get_file_info(item, base_dir))
-            
+
             # 如果是目录，递归搜索
             if item.is_dir():
                 await search_recursive(item)
-    
+
     await search_recursive(start_dir)
-    
+
     return {
         "search_keyword": keyword,
         "results_count": len(results),
-        "results": results
+        "results": results,
     }
+
 
 @app.get("/files/")
 async def list_files(path: str = "", is_shared: bool = False, search: str = None):
@@ -151,7 +153,7 @@ async def list_files(path: str = "", is_shared: bool = False, search: str = None
     # 如果有搜索关键词，执行搜索
     if search:
         return await search_files(search, base_dir, target_dir)
-    
+
     return _get_file_info(target_dir, base_dir)
 
 
@@ -171,17 +173,14 @@ async def toggle_share(data: dict = Body(...)):
     # 移动文件
     src.rename(dst)
 
-    return {
-        "filename": filename,
-        "is_shared": shared
-    }
+    return {"filename": filename, "is_shared": shared}
 
 
 @app.get("/download/{filename}/")
 async def download_file(filename: str):
     # 对URL中的文件名进行解码，处理可能的URL编码问题
     decoded_filename = unquote(filename)
-    
+
     # 先在公开目录查找
     file_path = PUBLIC_DIR / decoded_filename
     if not file_path.exists():
@@ -189,40 +188,37 @@ async def download_file(filename: str):
         file_path = PRIVATE_DIR / decoded_filename
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
-    
+
     # 获取文件MIME类型
     import mimetypes
+
     content_type, _ = mimetypes.guess_type(str(file_path))
     content_type = content_type or "application/octet-stream"
-    
+
     # 定义异步文件读取生成器
     async def file_iterator():
         async with aiofiles.open(file_path, "rb") as f:
             while chunk := await f.read(chunk_size):
                 yield chunk
-    
+
     # 设置响应头，支持中文文件名
     from fastapi.responses import StreamingResponse
     from urllib.parse import quote
-    
+
     # 确保文件名正确编码
     filename_encoded = quote(decoded_filename)
-    
+
     # 使用RFC 6266标准的格式设置Content-Disposition头
     headers = {
-        "Content-Disposition": f'attachment; filename="{filename_encoded}"; filename*=UTF-8\'\'{filename_encoded}',
+        "Content-Disposition": f"attachment; filename=\"{filename_encoded}\"; filename*=UTF-8''{filename_encoded}",
         "Content-Type": content_type,
     }
-    
-    return StreamingResponse(
-        file_iterator(),
-        headers=headers,
-        media_type=content_type
-    )
+
+    return StreamingResponse(file_iterator(), headers=headers, media_type=content_type)
 
 
 @app.post("/folders/")
-async def create_folder(new_folder = Body(...)):
+async def create_folder(new_folder=Body(...)):
     # folder_name: str, is_shared: bool = False
     folder_name = new_folder["folder_name"]
     is_shared = new_folder["is_shared"]
@@ -242,15 +238,16 @@ async def create_folder(new_folder = Body(...)):
         "path": str(new_folder.relative_to(project_root)),
     }
 
+
 @app.delete("/files/")
 async def delete_file(file_path: str, is_shared: bool = False):
     """删除文件"""
     # file_path = data["file_path"]
     # is_shared = data.get("is_shared", False)
-    
+
     target_dir = PUBLIC_DIR if is_shared else PRIVATE_DIR
     file_to_delete = target_dir / file_path
-    
+
     # 检查文件是否存在
     if not file_to_delete.exists():
         raise HTTPException(status_code=404, detail="文件不存在")
@@ -259,12 +256,9 @@ async def delete_file(file_path: str, is_shared: bool = False):
 
     # 删除文件
     file_to_delete.unlink()
-    
-    return {
-        "message": "文件删除成功",
-        "file_path": file_path,
-        "is_shared": is_shared
-    }
+
+    return {"message": "文件删除成功", "file_path": file_path, "is_shared": is_shared}
+
 
 @app.delete("/folders/")
 async def delete_folder(data: dict = Body(...)):
@@ -283,10 +277,10 @@ async def delete_folder(data: dict = Body(...)):
 
     if not folder_to_delete.exists():
         raise HTTPException(status_code=404, detail="文件夹不存在")
-    
+
     if not folder_to_delete.is_dir():
         raise HTTPException(status_code=400, detail="指定的路径不是文件夹")
-    
+
     # 异步删除文件夹内容
     async def remove_path(path: Path):
         if path.is_file():
@@ -295,12 +289,10 @@ async def delete_folder(data: dict = Body(...)):
             for item in path.iterdir():
                 await remove_path(item)
             await asyncio.to_thread(path.rmdir)
-    
+
     await remove_path(folder_to_delete)
-    
-    return {
-        "message": "文件夹删除成功"
-    }
+
+    return {"message": "文件夹删除成功"}
 
 
 @app.put("/files/")
@@ -308,7 +300,7 @@ async def rename_file(data: dict = Body(...)):
     """重命名文件"""
     old_path = data["old_path"]
     new_name = data["new_name"]
-    
+
     """重命名文件"""
     # 先在公开目录查找
     src = PUBLIC_DIR / old_path
@@ -330,16 +322,17 @@ async def rename_file(data: dict = Body(...)):
         "is_shared": src.parent == PUBLIC_DIR,
     }
 
+
 @app.put("/folders/")
 async def rename_folder(data: dict = Body(...)):
     """重命名文件夹"""
     old_path = data["old_path"]
     new_name = data["new_name"]
     is_shared = data.get("is_shared", False)
-    
+
     target_dir = PUBLIC_DIR if is_shared else PRIVATE_DIR
     src = target_dir / old_path
-    
+
     # 检查源文件夹是否存在
     if not src.exists():
         raise HTTPException(status_code=404, detail="文件夹不存在")
@@ -348,21 +341,22 @@ async def rename_folder(data: dict = Body(...)):
 
     # 构建新路径
     dst = src.parent / new_name
-    
+
     # 检查目标是否已存在
     if dst.exists():
         raise HTTPException(status_code=400, detail="目标文件夹名已存在")
 
     # 重命名文件夹
     src.rename(dst)
-    
+
     return {
         "message": "文件夹重命名成功",
         "old_path": old_path,
         "new_name": new_name,
         "is_shared": is_shared,
-        "new_path": str(dst.relative_to(target_dir))
+        "new_path": str(dst.relative_to(target_dir)),
     }
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -373,9 +367,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get('/')
+
+@app.get("/")
 def hello():
     return {"message": "一个简单的 FastAPI 文件上传Demo"}
+
 
 if __name__ == "__main__":
     current_path = Path(__file__).parent
