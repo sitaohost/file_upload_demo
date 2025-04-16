@@ -8,8 +8,6 @@ import os
 import aiofiles  # 异步文件操作库
 import asyncio  # 异步库
 from urllib.parse import unquote
-from pydantic import BaseModel
-from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware  # 导入跨域中间件
 from fastapi.responses import StreamingResponse
 
