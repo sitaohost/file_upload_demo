@@ -1,5 +1,8 @@
 pipeline {
-    agent 'aws-sg'
+    
+    agent {
+        label 'aws-sg'
+    }
     
     environment {
         DOCKER_IMAGE = "myapp:latest"
