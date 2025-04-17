@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_IMAGE = "myapp:${env.BUILD_ID}"
+        DOCKER_IMAGE = "myapp:latest"
     }
     
     stages {
